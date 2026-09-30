@@ -1235,6 +1235,15 @@ void Vt102Emulation::sendKeyEvent(QKeyEvent* origEvent, bool fromPaste)
             textToSend.prepend("\030@s");
         }
 
+#if defined(Q_OS_WIN)
+        // ConPTY expects DEL for Backspace and BS for Ctrl+Backspace.
+        // The Unix default key table uses the opposite mapping.
+        if (event->key() == Qt::Key_Backspace && !fromPaste)
+        {
+            textToSend += (modifiers & Qt::ControlModifier) ? '\x08' : '\x7f';
+        }
+        else
+#endif
         if ( entry.command() != KeyboardTranslator::NoCommand )
         {
             if (entry.command() & KeyboardTranslator::EraseCommand) {
