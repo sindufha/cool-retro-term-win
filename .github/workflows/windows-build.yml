@@ -1,0 +1,76 @@
+name: Windows Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    name: Build Windows installer and portable ZIP
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.11.0'
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          modules: 'qt5compat qtshadertools'
+          cache: true
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $iscc)) {
+            choco install innosetup --yes --no-progress
+          }
+          if (-not (Test-Path -LiteralPath $iscc)) {
+            throw "Inno Setup was not found at $iscc"
+          }
+
+      - name: Configure runner paths
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vsPath) {
+            throw 'A Visual Studio installation with the C++ toolchain was not found.'
+          }
+
+          $vcvars = Join-Path $vsPath 'VC\Auxiliary\Build\vcvarsall.bat'
+          $buildScript = 'packaging\windows\build.bat'
+          $content = [System.IO.File]::ReadAllText($buildScript)
+          $content = [regex]::Replace($content, '(?m)^set "QTDIR=.*"$', "set `"QTDIR=$env:QT_ROOT_DIR`"")
+          $content = [regex]::Replace($content, '(?m)^set "VCVARS=.*"$', "set `"VCVARS=$vcvars`"")
+          [System.IO.File]::WriteAllText($buildScript, $content, [System.Text.UTF8Encoding]::new($false))
+
+      - name: Build and package
+        shell: cmd
+        run: packaging\windows\build-all.bat
+
+      - name: Generate checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem -LiteralPath dist -File |
+            ForEach-Object {
+              $hash = Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName
+              "$($hash.Hash)  $($_.Name)"
+            } | Set-Content -LiteralPath dist\SHA256SUMS.txt
+
+      - name: Upload Windows packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: cool-retro-term-windows
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
