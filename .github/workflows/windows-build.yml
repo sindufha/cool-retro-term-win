@@ -52,8 +52,8 @@ jobs:
           $vcvars = Join-Path $vsPath 'VC\Auxiliary\Build\vcvarsall.bat'
           $buildScript = 'packaging\windows\build.bat'
           $content = [System.IO.File]::ReadAllText($buildScript)
-          $content = [regex]::Replace($content, '(?m)^set "QTDIR=.*"$', "set `"QTDIR=$env:QT_ROOT_DIR`"")
-          $content = [regex]::Replace($content, '(?m)^set "VCVARS=.*"$', "set `"VCVARS=$vcvars`"")
+          $content = [regex]::Replace($content, '(?m)^set "QTDIR=.*"\r?$', "set `"QTDIR=$env:QT_ROOT_DIR`"")
+          $content = [regex]::Replace($content, '(?m)^set "VCVARS=.*"\r?$', "set `"VCVARS=$vcvars`"")
           [System.IO.File]::WriteAllText($buildScript, $content, [System.Text.UTF8Encoding]::new($false))
 
       - name: Build and package
