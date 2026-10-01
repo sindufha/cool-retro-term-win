@@ -40,6 +40,7 @@
 #include <QLayout>
 #include <QMessageBox>
 #include <QPainter>
+#include <QFontMetricsF>
 #include <QPixmap>
 #include <QRegularExpression>
 #include <QScrollBar>
@@ -835,9 +836,7 @@ void TerminalDisplay::drawCharacters(QPainter& painter,
     const bool useStrikeOut = style->rendition & RE_STRIKEOUT || font().strikeOut();
     const bool useOverline = style->rendition & RE_OVERLINE || font().overline();
 
-    painter.setFont(font());
-
-    QFont font = painter.font();
+    QFont font = this->font();
     if (    font.bold() != useBold
          || font.underline() != useUnderline
          || font.italic() != useItalic
@@ -848,8 +847,20 @@ void TerminalDisplay::drawCharacters(QPainter& painter,
        font.setItalic(useItalic);
        font.setStrikeOut(useStrikeOut);
        font.setOverline(useOverline);
-       painter.setFont(font);
     }
+
+    // Qt 6 renders fractional glyph advances, but terminal cells (including
+    // the cursor) use integer widths. Keep monospace text on the same grid
+    // so rounding error cannot accumulate across a text fragment.
+    if (_fixedFont)
+    {
+        font.setLetterSpacing(QFont::AbsoluteSpacing, 0);
+        const QFontMetricsF metrics(font);
+        const qreal advance = metrics.horizontalAdvance(QLatin1String(REPCHAR))
+                              / qstrlen(REPCHAR);
+        font.setLetterSpacing(QFont::AbsoluteSpacing, _fontWidth - advance);
+    }
+    painter.setFont(font);
 
     // setup pen
     const CharacterColor& textColor = ( invertCharacterColor ? style->backgroundColor : style->foregroundColor );
